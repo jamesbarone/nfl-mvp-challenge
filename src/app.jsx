@@ -276,7 +276,9 @@ const App = () => {
     const text = `NFL MVP Challenge ${getTodayDateString()}
 ${score}/10
 
-${emojiGrid}`;
+${emojiGrid}
+
+https://nfl-trivia-challenge.netlify.app/`;
     
     try {
       await navigator.clipboard.writeText(text);
