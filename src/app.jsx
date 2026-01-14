@@ -87,6 +87,15 @@ const App = () => {
     loadGameData();
   }, []);
 
+  useEffect(() => {
+    // Auto-start game if user hasn't played today
+    if (!todayPlayed && gameState === 'start') {
+      const selectedYears = getTodayQuestions();
+      setQuestions(selectedYears);
+      setGameState('playing');
+    }
+  }, [todayPlayed, gameState]);
+
   const getTodayDate = () => {
     const today = new Date();
     return `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
@@ -129,6 +138,16 @@ const App = () => {
         if (scoreResult && scoreResult.value) {
           setTodayScore(parseInt(scoreResult.value));
         }
+        
+        // Load answer history for display
+        try {
+          const historyResult = await window.storage.get('nfl_mvp_today_history');
+          if (historyResult && historyResult.value) {
+            setAnswerHistory(JSON.parse(historyResult.value));
+          }
+        } catch (e) {
+          console.log('No history found');
+        }
       }
     } catch (error) {
       console.log('No previous game data');
@@ -143,11 +162,12 @@ const App = () => {
     }
   };
 
-  const saveTodayScore = async (finalScore) => {
+  const saveTodayScore = async (finalScore, history) => {
     try {
       const todayDate = getTodayDate();
       await window.storage.set('nfl_mvp_last_played', todayDate);
       await window.storage.set('nfl_mvp_today_score', finalScore.toString());
+      await window.storage.set('nfl_mvp_today_history', JSON.stringify(history));
     } catch (error) {
       console.error('Error saving today score:', error);
     }
@@ -216,7 +236,7 @@ const App = () => {
     setGameState('ended');
     setTodayScore(finalScore);
     setTodayPlayed(true);
-    await saveTodayScore(finalScore);
+    await saveTodayScore(finalScore, answerHistory);
     
     if (finalScore > bestScore) {
       setBestScore(finalScore);
@@ -264,12 +284,12 @@ ${emojiGrid}`;
     return `${hours}h ${minutes}m`;
   };
 
-  if (todayPlayed && gameState === 'start') {
+  if (todayPlayed && (gameState === 'start' || gameState === 'ended')) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-green-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
           <Clock className="w-20 h-20 mx-auto mb-4 text-blue-500" />
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">Already Played Today!</h1>
+          <h1 className="text-4xl font-bold text-gray-800 mb-4">Today's Game Complete!</h1>
           <p className="text-gray-600 mb-6">
             You've completed today's challenge. Come back tomorrow for a new set of questions!
           </p>
@@ -288,6 +308,39 @@ ${emojiGrid}`;
           {bestScore > 0 && (
             <div className="text-gray-600 mb-6">
               Best Score: {bestScore}/10
+            </div>
+          )}
+
+          {answerHistory.length > 0 && (
+            <div className="mb-6 bg-gray-50 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Your Answers</h3>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {answerHistory.map((item, index) => (
+                  <div 
+                    key={index}
+                    className={`p-2 rounded-lg border-2 text-sm ${
+                      item.correct 
+                        ? 'bg-green-50 border-green-500' 
+                        : 'bg-red-50 border-red-500'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-700">
+                          {index + 1}.
+                        </span>
+                        <span className="font-semibold text-gray-800">{item.year}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-700">{item.answer}</span>
+                        <span>
+                          {item.correct ? '✓' : '✗'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -318,36 +371,10 @@ ${emojiGrid}`;
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-green-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
-          <Trophy className="w-20 h-20 mx-auto mb-4 text-yellow-500" />
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">NFL MVP Challenge</h1>
-          <p className="text-gray-600 mb-6">
-            Test your NFL knowledge! Can you name the MVP for each year?
-          </p>
-          <div className="bg-blue-50 rounded-lg p-4 mb-6">
-            <p className="text-sm text-gray-700 mb-2">
-              • 10 random years from 1960-2024
-            </p>
-            <p className="text-sm text-gray-700 mb-2">
-              • Enter last name (or full name)
-            </p>
-            <p className="text-sm text-gray-700 mb-2">
-              • One wrong answer ends the game!
-            </p>
-            <p className="text-sm text-gray-700 font-semibold text-blue-600">
-              • One game per day
-            </p>
+          <div className="animate-pulse">
+            <Trophy className="w-16 h-16 mx-auto mb-4 text-yellow-500" />
+            <p className="text-gray-600">Loading today's challenge...</p>
           </div>
-          {bestScore > 0 && (
-            <div className="mb-6 text-lg font-semibold text-blue-600">
-              Best Score: {bestScore}/10
-            </div>
-          )}
-          <button
-            onClick={startGame}
-            className="bg-gradient-to-r from-blue-600 to-green-600 text-white px-8 py-4 rounded-xl text-xl font-bold hover:from-blue-700 hover:to-green-700 transition-all transform hover:scale-105 shadow-lg"
-          >
-            Start Today's Game
-          </button>
         </div>
       </div>
     );
@@ -359,6 +386,11 @@ ${emojiGrid}`;
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-green-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-800">NFL MVP Challenge</h1>
+            <p className="text-sm text-gray-500">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+          </div>
+
           <div className="flex justify-between items-center mb-6">
             <div className="text-sm font-semibold text-gray-600">
               Question {currentQuestion + 1}/10
@@ -449,89 +481,12 @@ ${emojiGrid}`;
   }
 
   if (gameState === 'ended') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-green-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full text-center">
-          <Trophy className="w-20 h-20 mx-auto mb-4 text-yellow-500" />
-          <h2 className="text-3xl font-bold text-gray-800 mb-4">Game Over!</h2>
-          
-          <div className="bg-gradient-to-r from-blue-100 to-green-100 rounded-xl p-6 mb-6">
-            <div className="text-5xl font-bold text-gray-800 mb-2">{score}/10</div>
-            <div className="text-gray-600">Questions Correct</div>
-          </div>
-
-          {score === 10 && (
-            <div className="bg-yellow-100 rounded-lg p-4 mb-6">
-              <p className="text-yellow-800 font-bold text-xl">🎉 Perfect Score! 🎉</p>
-            </div>
-          )}
-
-          {score > bestScore && score < 10 && (
-            <div className="bg-green-100 rounded-lg p-4 mb-6">
-              <p className="text-green-800 font-semibold">🎊 New Best Score! 🎊</p>
-            </div>
-          )}
-
-          {bestScore > 0 && (
-            <div className="text-gray-600 mb-6">
-              Best Score: {bestScore}/10
-            </div>
-          )}
-
-          {answerHistory.length > 0 && (
-            <div className="mb-6 bg-gray-50 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Your Answers</h3>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {answerHistory.map((item, index) => (
-                  <div 
-                    key={index}
-                    className={`p-2 rounded-lg border-2 text-sm ${
-                      item.correct 
-                        ? 'bg-green-50 border-green-500' 
-                        : 'bg-red-50 border-red-500'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-700">
-                          {index + 1}.
-                        </span>
-                        <span className="font-semibold text-gray-800">{item.year}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-700">{item.answer}</span>
-                        <span>
-                          {item.correct ? '✓' : '✗'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="bg-blue-50 rounded-lg p-4 mb-6">
-            <p className="text-sm text-gray-700 font-semibold">Next game in:</p>
-            <p className="text-2xl font-bold text-blue-600">{getTimeUntilMidnight()}</p>
-          </div>
-
-          <button
-            onClick={shareResults}
-            className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg font-bold hover:from-blue-700 hover:to-blue-800 transition-all flex items-center justify-center gap-2"
-          >
-            <Share2 className="w-5 h-5" />
-            Share Results
-          </button>
-
-          {shareMessage && (
-            <div className="bg-green-100 text-green-800 py-2 px-4 rounded-lg font-semibold mt-4">
-              {shareMessage}
-            </div>
-          )}
-        </div>
-      </div>
-    );
+    // This state is now handled by the todayPlayed check above
+    // Redirect to the completed state
+    if (!todayPlayed) {
+      setTodayPlayed(true);
+    }
+    return null;
   }
 };
 
