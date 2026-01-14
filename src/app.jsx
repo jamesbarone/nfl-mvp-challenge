@@ -88,13 +88,20 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    // Auto-start game if user hasn't played today
-    if (!todayPlayed && gameState === 'start') {
+    // Auto-start game ONLY if user hasn't played today
+    if (!todayPlayed && gameState === 'start' && questions.length === 0) {
+      console.log('Auto-starting game...');
       const selectedYears = getTodayQuestions();
       setQuestions(selectedYears);
       setGameState('playing');
     }
-  }, [todayPlayed, gameState]);
+    
+    // If they already played, force to ended state
+    if (todayPlayed && gameState === 'playing') {
+      console.log('Already played - forcing to results screen');
+      setGameState('ended');
+    }
+  }, [todayPlayed, gameState, questions]);
 
   const getTodayDate = () => {
     const today = new Date();
@@ -165,7 +172,10 @@ const App = () => {
   };
 
   const startGame = () => {
+    // Prevent starting if already played
     if (todayPlayed) {
+      console.log('Cannot start - already played today');
+      setGameState('ended');
       return;
     }
 
@@ -185,6 +195,13 @@ const App = () => {
   };
 
   const checkAnswer = () => {
+    // Prevent answering if already played today
+    if (todayPlayed) {
+      console.log('Cannot answer - already played today');
+      setGameState('ended');
+      return;
+    }
+    
     const year = questions[currentQuestion];
     const correctAnswer = NFL_MVPS[year];
     const normalizedCorrect = normalizeName(correctAnswer);
@@ -382,6 +399,13 @@ ${emojiGrid}`;
   }
 
   if (gameState === 'playing') {
+    // Double-check they should be playing
+    if (todayPlayed) {
+      console.log('Playing state but already played - redirecting to results');
+      setGameState('ended');
+      return null;
+    }
+    
     const year = questions[currentQuestion];
     
     return (
