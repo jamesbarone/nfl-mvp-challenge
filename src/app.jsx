@@ -122,55 +122,46 @@ const App = () => {
     return shuffled.slice(0, 10);
   };
 
-  const loadGameData = async () => {
+  const loadGameData = () => {
     try {
-      const bestResult = await window.storage.get('nfl_mvp_best_score');
-      if (bestResult && bestResult.value) {
-        setBestScore(parseInt(bestResult.value));
-      }
-
       const todayDate = getTodayDate();
-      const lastPlayedResult = await window.storage.get('nfl_mvp_last_played');
+      const lastPlayed = localStorage.getItem('nfl_mvp_last_played');
       
-      if (lastPlayedResult && lastPlayedResult.value === todayDate) {
+      console.log('Today:', todayDate);
+      console.log('Last played:', lastPlayed);
+      
+      if (lastPlayed === todayDate) {
+        console.log('Already played today!');
         setTodayPlayed(true);
-        const scoreResult = await window.storage.get('nfl_mvp_today_score');
-        if (scoreResult && scoreResult.value) {
-          setTodayScore(parseInt(scoreResult.value));
+        
+        const scoreStr = localStorage.getItem('nfl_mvp_today_score');
+        if (scoreStr) {
+          setTodayScore(parseInt(scoreStr));
         }
         
-        // Load answer history for display
-        try {
-          const historyResult = await window.storage.get('nfl_mvp_today_history');
-          if (historyResult && historyResult.value) {
-            setAnswerHistory(JSON.parse(historyResult.value));
-          }
-        } catch (e) {
-          console.log('No history found');
+        const historyStr = localStorage.getItem('nfl_mvp_today_history');
+        if (historyStr) {
+          setAnswerHistory(JSON.parse(historyStr));
         }
+      } else {
+        console.log('New day - can play!');
+      }
+      
+      const bestScoreStr = localStorage.getItem('nfl_mvp_best_score');
+      if (bestScoreStr) {
+        setBestScore(parseInt(bestScoreStr));
       }
     } catch (error) {
-      console.log('No previous game data');
+      console.error('Error loading game data:', error);
     }
   };
 
   const saveBestScore = async (newScore) => {
-    try {
-      await window.storage.set('nfl_mvp_best_score', newScore.toString());
-    } catch (error) {
-      console.error('Error saving score:', error);
-    }
+    // Removed - now handled directly in endGame
   };
 
   const saveTodayScore = async (finalScore, history) => {
-    try {
-      const todayDate = getTodayDate();
-      await window.storage.set('nfl_mvp_last_played', todayDate);
-      await window.storage.set('nfl_mvp_today_score', finalScore.toString());
-      await window.storage.set('nfl_mvp_today_history', JSON.stringify(history));
-    } catch (error) {
-      console.error('Error saving today score:', error);
-    }
+    // Removed - now handled directly in endGame
   };
 
   const startGame = () => {
@@ -215,32 +206,42 @@ const App = () => {
     if (isCorrect) {
       const newScore = score + 1;
       setScore(newScore);
-      setFeedback(`✓ Correct! ${correctAnswer}`);
       
-      setTimeout(() => {
-        if (currentQuestion + 1 < questions.length) {
-          setCurrentQuestion(currentQuestion + 1);
-          setUserAnswer('');
-          setFeedback('');
-        } else {
-          endGame(newScore);
-        }
-      }, 1500);
+      // Move to next question immediately or end game
+      if (currentQuestion + 1 < questions.length) {
+        setCurrentQuestion(currentQuestion + 1);
+        setUserAnswer('');
+        setFeedback('');
+      } else {
+        endGame(newScore, newAnswerHistory);
+      }
     } else {
-      endGame(score);
-      setFeedback(`✗ Incorrect. The answer was ${correctAnswer}`);
+      endGame(score, newAnswerHistory);
     }
   };
 
-  const endGame = async (finalScore) => {
-    setGameState('ended');
+  const endGame = async (finalScore, history) => {
+    console.log('Ending game with score:', finalScore);
+    console.log('Saving to localStorage...');
+    
+    const todayDate = getTodayDate();
+    
+    // Save to localStorage immediately
+    localStorage.setItem('nfl_mvp_last_played', todayDate);
+    localStorage.setItem('nfl_mvp_today_score', finalScore.toString());
+    localStorage.setItem('nfl_mvp_today_history', JSON.stringify(history));
+    
+    console.log('Saved last_played:', localStorage.getItem('nfl_mvp_last_played'));
+    console.log('Saved today_score:', localStorage.getItem('nfl_mvp_today_score'));
+    
+    // Update state
     setTodayScore(finalScore);
     setTodayPlayed(true);
-    await saveTodayScore(finalScore, answerHistory);
+    setGameState('ended');
     
     if (finalScore > bestScore) {
       setBestScore(finalScore);
-      await saveBestScore(finalScore);
+      localStorage.setItem('nfl_mvp_best_score', finalScore.toString());
     }
   };
 
@@ -418,20 +419,11 @@ ${emojiGrid}`;
             type="text"
             value={userAnswer}
             onChange={(e) => setUserAnswer(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && userAnswer.trim() && !feedback && checkAnswer()}
+            onKeyPress={(e) => e.key === 'Enter' && userAnswer.trim() && checkAnswer()}
             placeholder="Enter player's last name"
             className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-lg mb-4 focus:outline-none focus:border-blue-500"
             autoFocus
-            disabled={feedback !== ''}
           />
-
-          {feedback && (
-            <div className={`p-4 rounded-lg mb-4 text-center font-semibold ${
-              feedback.includes('✓') ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-              {feedback}
-            </div>
-          )}
 
           {!feedback && (
             <button
