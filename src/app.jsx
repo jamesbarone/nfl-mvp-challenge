@@ -92,6 +92,27 @@ const App = () => {
     return `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
   };
 
+  const seededRandom = (seed) => {
+    let x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  };
+
+  const getTodayQuestions = () => {
+    const dateString = getTodayDate();
+    const seed = dateString.split('-').reduce((acc, val) => acc + parseInt(val), 0);
+    
+    const years = Object.keys(NFL_MVPS);
+    const shuffled = [...years];
+    
+    // Fisher-Yates shuffle with seeded random
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(seededRandom(seed + i) * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    
+    return shuffled.slice(0, 10);
+  };
+
   const loadGameData = async () => {
     try {
       const bestResult = await window.storage.get('nfl_mvp_best_score');
@@ -137,9 +158,7 @@ const App = () => {
       return;
     }
 
-    const years = Object.keys(NFL_MVPS);
-    const shuffled = [...years].sort(() => Math.random() - 0.5);
-    const selectedYears = shuffled.slice(0, 10);
+    const selectedYears = getTodayQuestions();
     
     setQuestions(selectedYears);
     setCurrentQuestion(0);
